@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JS GO: Monster Hunter</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #001428; color: #00f2ff; font-family: monospace; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; filter: invert(100%) hue-rotate(180deg) brightness(0.8) contrast(1.2); }
+        #ui { position: absolute; bottom: 20px; left: 10px; z-index: 3; background: rgba(0,20,40,0.85); padding: 15px; border: 1px solid #00f2ff; }
+        #battle-ui { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:20; padding:20px; }
+        progress { width: 100%; height: 20px; accent-color: #2ecc71; }
+        @keyframes wobble { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
+        .wobbling { animation: wobble 0.6s infinite; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <div id="ui">
+        <div id="m-info">Searching for monsters...</div>
+        <button onclick="catchMonster()">CATCH IT!</button>
+    </div>
+
+    <div id="battle-ui">
+        <h2>BATTLE MODE</h2>
+        <progress id="enemy-hp" value="100" max="100"></progress>
+        <button onclick="attack()">ATTACK</button>
+    </div>
+
+    <script>
+        // 1. Data & State
+        const monsters = [
+            { name: "Florajoule", type: "Grass/Electric", lat: 40.7128, lon: -74.0060, color: 0x32CD32, rarity: 1.0 },
+            // ... Add your other monsters here!
+        ];
+        let enemyHP = 100;
+        let caughtMonsters = JSON.parse(localStorage.getItem('myMonsters')) || [];
+
+        // 2. Core Logic
+        function catchMonster() {
+            let hpPercent = enemyHP / 100;
+            let catchRate = 1.0 - hpPercent;
+            if(Math.random() <= catchRate) {
+                alert("Captured!");
+            } else {
+                alert("Broke free!");
+            }
+        }
+
+        function attack() {
+            enemyHP -= 10;
+            document.getElementById('enemy-hp').value = enemyHP;
+            if(enemyHP <= 0) alert("Victory!");
+        }
+
+        // Initialize Map and Three.js (as discussed in previous steps)
+    </script>
+</body>
+</html>
