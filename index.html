@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JS GO - Monster Spawner</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; }
+        #video-bg { position: fixed; top: 0; left: 0; min-width: 100%; min-height: 100%; z-index: -1; }
+        #ui { position: absolute; bottom: 20px; width: 100%; text-align: center; color: white; font-family: sans-serif; pointer-events: none; }
+        .data-box { background: rgba(0,0,0,0.7); padding: 15px; border-radius: 15px; display: inline-block; border: 2px solid #00ff00; }
+        button { pointer-events: auto; padding: 12px 24px; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <video id="video-bg" autoplay playsinline></video>
+
+    <div id="ui">
+        <div class="data-box">
+            <div id="status">Waiting for GPS...</div>
+            <div id="distance">Nearest Monster: --</div>
+            <button onclick="startApp()">START SENSOR</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, monster;
+        let videoElement = document.getElementById('video-bg');
+
+        // 1. DATABASE OF MONSTERS (Change these to coordinates near you!)
+        const monstersList = [
+            { id: "Greenie", lat: 40.7128, lon: -74.0060, color: 0x00ff00 },
+            { id: "Redd", lat: 40.7135, lon: -74.0065, color: 0xff0000 },
+            { id: "Blub", lat: 40.7120, lon: -74.0055, color: 0x0000ff }
+        ];
+
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            // "alpha: true" makes the 3D background transparent so we see the camera!
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Create one generic monster model (a floating diamond)
+            const geometry = new THREE.OctahedronGeometry(1, 0);
+            const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+            monster = new THREE.Mesh(geometry, material);
+            monster.visible = false; 
+            scene.add(monster);
+
+            const light = new THREE.PointLight(0xffffff, 1, 100);
+            light.position.set(5, 5, 5);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            animate();
+        }
+
+        // 2. START CAMERA FEED
+        async function startApp() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } // Uses back camera
+                });
+                videoElement.srcObject = stream;
+                initThree();
+                requestGPS();
+            } catch (err) {
+                alert("Camera error: " + err.message);
+            }
+        }
+
+        // 3. GPS DISTANCE LOGIC
+        function requestGPS() {
+            navigator.geolocation.watchPosition((pos) => {
+                const uLat = pos.coords.latitude;
+                const uLon = pos.coords.longitude;
+                document.getElementById('status').innerText = `GPS Active: ${uLat.toFixed(4)}, ${uLon.toFixed(4)}`;
+
+                // Find the closest monster from our list
+                let closestDist = 999999;
+                let activeMonster = null;
+
+                monstersList.forEach(m => {
+                    const d = getDistance(uLat, uLon, m.lat, m.lon);
+                    if (d < closestDist) {
+                        closestDist = d;
+                        activeMonster = m;
+                    }
+                });
+
+                document.getElementById('distance').innerText = `Nearest: ${activeMonster.id} (${closestDist.toFixed(1)}m)`;
+
+                // SHOW MONSTER if within 20 meters
+                if (closestDist < 20) {
+                    monster.visible = true;
+                    monster.material.color.setHex(activeMonster.color);
+                } else {
+                    monster.visible = false;
+                }
+            });
+        }
+
+        // Standard Distance Formula (Meters)
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(monster.visible) {
+                monster.rotation.y += 0.05;
+                monster.position.z = -5; // Keeps it in front of the lens
+            }
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JS GO - Named Monsters</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #video-bg { position: fixed; top: 0; left: 0; min-width: 100%; min-height: 100%; z-index: -1; }
+        #ui { position: absolute; bottom: 30px; width: 100%; text-align: center; color: white; pointer-events: none; }
+        
+        .data-box { 
+            background: rgba(0,0,0,0.8); 
+            padding: 20px; 
+            border-radius: 20px; 
+            display: inline-block; 
+            border: 2px solid #00ff00;
+            box-shadow: 0 0 15px rgba(0,255,0,0.3);
+        }
+
+        .monster-name { font-size: 24px; font-weight: bold; color: #00ff00; margin-bottom: 5px; }
+        .distance-text { font-size: 14px; opacity: 0.8; margin-bottom: 15px; }
+
+        button { 
+            pointer-events: auto; 
+            padding: 15px 30px; 
+            background: #00ff00; 
+            border: none; 
+            border-radius: 50px; 
+            font-weight: bold; 
+            color: black;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.9); }
+        #catch-ui { display: none; } /* Hidden until a monster is near */
+    </style>
+</head>
+<body>
+
+    <video id="video-bg" autoplay playsinline></video>
+
+    <div id="ui">
+        <div id="setup-ui" class="data-box">
+            <h2>Sensors Offline</h2>
+            <button onclick="startApp()">Initialize GPS & AR</button>
+        </div>
+
+        <div id="catch-ui" class="data-box">
+            <div class="monster-name" id="m-name">UNKNOWN</div>
+            <div class="distance-text" id="m-dist">Scanning...</div>
+            <button onclick="catchMonster()">CATCH IT!</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, monsterMesh;
+        let videoElement = document.getElementById('video-bg');
+        let currentActiveMonster = null;
+
+        // --- 1. UPDATED MONSTER LIST WITH COOL NAMES ---
+        const monstersList = [
+            { name: "Florajoule", lat: 40.7128, lon: -74.0060, color: 0x32CD32 }, // Green
+            { name: "Cindragon",  lat: 40.7135, lon: -74.0065, color: 0xFF4500 }, // Red/Orange
+            { name: "Nebulisk",   lat: 40.7120, lon: -74.0055, color: 0x9370DB }, // Purple
+            { name: "Aquashell",  lat: 40.7115, lon: -74.0070, color: 0x00BFFF }  // Blue
+        ];
+
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const geometry = new THREE.OctahedronGeometry(1, 0);
+            const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            monsterMesh = new THREE.Mesh(geometry, material);
+            monsterMesh.visible = false; 
+            scene.add(monsterMesh);
+
+            const light = new THREE.PointLight(0xffffff, 1, 100);
+            light.position.set(5, 5, 5);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            animate();
+        }
+
+        async function startApp() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                videoElement.srcObject = stream;
+                document.getElementById('setup-ui').style.display = 'none';
+                document.getElementById('catch-ui').style.display = 'inline-block';
+                initThree();
+                requestGPS();
+            } catch (err) {
+                alert("Please allow Camera & GPS access!");
+            }
+        }
+
+        function requestGPS() {
+            navigator.geolocation.watchPosition((pos) => {
+                const uLat = pos.coords.latitude;
+                const uLon = pos.coords.longitude;
+
+                let closestDist = Infinity;
+                let nearbyMonster = null;
+
+                monstersList.forEach(m => {
+                    const d = getDistance(uLat, uLon, m.lat, m.lon);
+                    if (d < closestDist) {
+                        closestDist = d;
+                        nearbyMonster = m;
+                    }
+                });
+
+                // Update UI text
+                document.getElementById('m-dist').innerText = `${closestDist.toFixed(1)} meters away`;
+                
+                if (closestDist < 25) { // 25 meters range
+                    currentActiveMonster = nearbyMonster;
+                    document.getElementById('m-name').innerText = nearbyMonster.name;
+                    monsterMesh.visible = true;
+                    monsterMesh.material.color.setHex(nearbyMonster.color);
+                } else {
+                    document.getElementById('m-name').innerText = "SEARCHING...";
+                    monsterMesh.visible = false;
+                }
+            });
+        }
+
+        function catchMonster() {
+            if (currentActiveMonster) {
+                alert("GOTCHA! " + currentActiveMonster.name + " was added to your collection!");
+                // Here you would normally add the monster to a save-file or database
+                monsterMesh.visible = false;
+            }
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(monsterMesh.visible) {
+                monsterMesh.rotation.y += 0.05;
+                monsterMesh.position.z = -6; // Floating in front of you
+                monsterMesh.position.y = Math.sin(Date.now() * 0.003) * 0.5; // Hovering
+            }
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JS GO - Map & Monsters</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
+        #ar-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+        #ui { position: absolute; bottom: 20px; width: 100%; text-align: center; z-index: 3; }
+        .data-box { background: rgba(255,255,255,0.9); padding: 15px; border-radius: 15px; display: inline-block; border: 2px solid #2ecc71; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        button { pointer-events: auto; padding: 12px 24px; background: #2ecc71; color: white; border: none; border-radius: 50px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div> <div id="ar-overlay"></div> <div id="ui">
+        <div class="data-box">
+            <div id="m-name" style="font-weight: bold; color: #2ecc71;">EXPLORING...</div>
+            <div id="m-dist" style="font-size: 12px; margin-bottom: 10px;">Find a monster on the map!</div>
+            <button onclick="catchMonster()">CATCH IT!</button>
+        </div>
+    </div>
+
+    <script>
+        let map, userMarker, monsterMesh, scene, camera, renderer;
+        let currentMonster = null;
+
+        // --- MONSTER DATABASE ---
+        const monsters = [
+            { name: "Florajoule", lat: 40.7128, lon: -74.0060, color: 0x32CD32 },
+            { name: "Cindragon",  lat: 40.7135, lon: -74.0065, color: 0xFF4500 },
+            { name: "Nebulisk",   lat: 40.4432, lon: -74.4406, color: 0x9370DB } 
+        ];
+
+        function initApp() {
+            // 1. Initialize Leaflet Map
+            map = L.map('map').setView([40.7128, -74.0060], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+
+            userMarker = L.circleMarker([40.7128, -74.0060], { color: '#3498db', radius: 10 }).addTo(map);
+
+            // 2. Add Monsters as Markers on the Map
+            monsters.forEach(m => {
+                L.circleMarker([m.lat, m.lon], { color: 'red', radius: 5 }).addTo(map)
+                 .bindPopup(`<b>Wild ${m.name}</b>`);
+            });
+
+            // 3. Initialize Three.js Overlay
+            initThree();
+            startGPS();
+        }
+
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('ar-overlay').appendChild(renderer.domElement);
+
+            const geometry = new THREE.OctahedronGeometry(1, 0);
+            monsterMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xffffff }));
+            monsterMesh.visible = false;
+            scene.add(monsterMesh);
+
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(1, 1, 1);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            animate();
+        }
+
+        function startGPS() {
+            navigator.geolocation.watchPosition((pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                
+                userMarker.setLatLng([lat, lon]);
+                map.panTo([lat, lon]);
+
+                // Check distance to monsters
+                let found = false;
+                monsters.forEach(m => {
+                    const dist = getDistance(lat, lon, m.lat, m.lon);
+                    if (dist < 30) {
+                        currentMonster = m;
+                        document.getElementById('m-name').innerText = m.name + " APPEARED!";
+                        document.getElementById('m-dist').innerText = `${dist.toFixed(1)}m away`;
+                        monsterMesh.material.color.setHex(m.color);
+                        monsterMesh.visible = true;
+                        found = true;
+                    }
+                });
+
+                if (!found) {
+                    monsterMesh.visible = false;
+                    document.getElementById('m-name').innerText = "EXPLORING...";
+                    document.getElementById('m-dist').innerText = "Walk toward a red dot!";
+                }
+            });
+        }
+
+        function catchMonster() {
+            if (currentMonster && monsterMesh.visible) {
+                alert(`You caught ${currentMonster.name}!`);
+                monsterMesh.visible = false;
+            }
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(monsterMesh.visible) {
+                monsterMesh.rotation.y += 0.05;
+                monsterMesh.position.z = -5;
+                monsterMesh.position.y = Math.sin(Date.now() * 0.003) * 0.5;
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
+<div id="ui">
+    <div class="data-box">
+        <div id="m-name" style="font-weight: bold; color: #2ecc71;">EXPLORING...</div>
+        <button onclick="catchMonster()">CATCH IT!</button>
+        <button onclick="toggleLog()" style="background: #3498db; margin-top: 10px;">MONSTER LOG</button>
+    </div>
+</div>
+
+<div id="log-overlay" style="display:none; position:fixed; top:10%; left:10%; width:80%; height:80%; background:white; z-index:10; padding:20px; border-radius:20px; overflow-y:scroll;">
+    <h2>Monster Log</h2>
+    <div id="log-list"></div>
+    <button onclick="toggleLog()">CLOSE</button>
+</div
+let caughtMonsters = JSON.parse(localStorage.getItem('myMonsters')) || [];
+
+function catchMonster() {
+    if (currentMonster && monsterMesh.visible) {
+        if (!caughtMonsters.includes(currentMonster.name)) {
+            caughtMonsters.push(currentMonster.name);
+            localStorage.setItem('myMonsters', JSON.stringify(caughtMonsters));
+            alert(`You caught ${currentMonster.name}! Added to Log.`);
+        } else {
+            alert("You already caught this one!");
+        }
+        monsterMesh.visible = false;
+    }
+}
+
+function toggleLog() {
+    const logDiv = document.getElementById('log-overlay');
+    const logList = document.getElementById('log-list');
+    
+    // Toggle visibility
+    logDiv.style.display = (logDiv.style.display === 'none') ? 'block' : 'none';
+    
+    // Refresh the list
+    logList.innerHTML = caughtMonsters.length > 0 
+        ? caughtMonsters.map(m => `<p>✅ ${m}</p>`).join('') 
+        : "<p>Your log is empty. Go cat
+          <div id="battle-ui" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:20; color:white; padding:20px;">
+    <h2>BATTLE MODE</h2>
+    <div id="battle-log" style="height:200px; overflow-y:scroll; background:#111; padding:10px;"></div>
+    
+    <div style="margin-top:20px;">
+        <button onclick="attack()">ATTACK</button>
+        <button onclick="endBattle()" style="background:#ff4444;">FLEE</button>
+    </div>
+</div>
+<div id="battle-ui" style="display:none; ...">
+    <div class="hp-container">
+        <span>Wild Monster HP:</span>
+        <progress id="enemy-hp" value="100" max="100"></progress>
+    </div>
+
+    <div class="hp-container">
+        <span>Your Monster HP:</span>
+        <progress id="player-hp" value="100" max="100"></progress>
+    </div>
+    
+    <div id="battle-log"></div>
+    </div>
+    #log-overlay {
+    border: 3px solid #3498db;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    font-family: sans-serif;
+}
+#log-overlay h2 { color: #3498db; }
+.data-box {
+    background: rgba(0, 20, 40, 0.85); /* Deep dark blue-black */
+    border: 1px solid #00f2ff; /* Cyan radar-glow border */
+    color: #00f2ff;
+    box-shadow: 0 0 10px #00f2ff;
+}
+
+button {
+    background: #00f2ff;
+    color: #000;
+    font-weight: bold;
+    border: none;
+    border-radius: 0; /* Sharp, techy edges */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#map {
+    filter: invert(100%) hue-rotate(180deg) brightness(0.8) contrast(1.2);
+}
+.hp-container { margin-bottom: 15px; color: white; }
+progress {
+    width: 100%;
+    height: 20px;
+    appearance: none;
+}
+progress::-webkit-progress-value { background: #2ecc71; transition: width 0.5s; }
+progress::-webkit-progress-bar { background: #333; }
+@keyframes wobble {
+    0% { transform: rotate(0deg); }
+    20% { transform: rotate(-15deg); }
+    40% { transform: rotate(15deg); }
+    60% { transform: rotate(-10deg); }
+    80% { transform: rotate(10deg); }
+    100% { transform: rotate(0deg); }
+}
+
+.wobbling {
+    animation: wobble 0.6s ease-in-out infinite;
+}
+          let caughtMonsters = JSON.parse(localStorage.getItem('myMonsters')) || [];
+
+function catchMonster() {
+    if (currentMonster && monsterMesh.visible) {
+        if (!caughtMonsters.includes(currentMonster.name)) {
+            caughtMonsters.push(currentMonster.name);
+            localStorage.setItem('myMonsters', JSON.stringify(caughtMonsters));
+            alert(`You caught ${currentMonster.name}! Added to Log.`);
+        } else {
+            alert("You already caught this one!");
+        }
+        monsterMesh.visible = false;
+    }
+}
+
+function toggleLog() {
+    const logDiv = document.getElementById('log-overlay');
+    const logList = document.getElementById('log-list');
+    
+    // Toggle visibility
+    logDiv.style.display = (logDiv.style.display === 'none') ? 'block' : 'none';
+    
+    // Refresh the list
+    logList.innerHTML = caughtMonsters.length > 0 
+        ? caughtMonsters.map(m => `<p>✅ ${m}</p>`).join('') 
+        : "<p>Your log is empty. Go catch some!</p>";
+}
+// Replace your old L.tileLayer with this:
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+}).addTo(map);
+// Inside startGPS(), add this to make the marker pulse
+userMarker.setStyle({
+    fillColor: '#00f2ff',
+    fillOpacity: 0.5 + Math.sin(Date.now() / 500) * 0.2
+});
+// You need this additional script tag in your <head>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+// Then, update your initThree to load a model:
+function initThree() {
+    scene = new THREE.Scene();
+    // ... camera and renderer setup ...
+    
+    const loader = new THREE.GLTFLoader();
+    
+    // Replace 'path/to/your/monster.glb' with a real link
+    loader.load('https://your-server.com/monster.glb', (gltf) => {
+        monsterMesh = gltf.scene;
+        monsterMesh.scale.set(0.5, 0.5, 0.5); // Adjust size
+        monsterMesh.visible = false;
+        scene.add(monsterMesh);
+    });
+}
+const monsters = [
+    // Grass/Electric
+    { name: "Florajoule", type: "Grass/Electric", lat: 40.7128, lon: -74.0060, color: 0x32CD32 },
+    { name: "Vinebolt",   type: "Grass/Electric", lat: 40.7129, lon: -74.0061, color: 0x228B22 },
+    { name: "Sparkroot",  type: "Grass/Electric", lat: 40.7130, lon: -74.0062, color: 0x00FF7F },
+    
+    // Fire
+    { name: "Cindragon",  type: "Fire", lat: 40.7135, lon: -74.0065, color: 0xFF4500 },
+    { name: "Ignisaur",   type: "Fire", lat: 40.7136, lon: -74.0066, color: 0xFF6347 },
+    { name: "Pyromane",   type: "Fire", lat: 40.7137, lon: -74.0067, color: 0xDC143C },
+    
+    // Water
+    { name: "Aquashell",  type: "Water", lat: 40.7115, lon: -74.0070, color: 0x00BFFF },
+    { name: "Hydrofin",   type: "Water", lat: 40.7116, lon: -74.0071, color: 0x1E90FF },
+    { name: "Tidalist",   type: "Water", lat: 40.7117, lon: -74.0072, color: 0x4682B4 }
+];
+// Inside the distance check loop:
+if (dist < 30) {
+    currentMonster = m;
+    // Now showing the Type in the UI!
+    document.getElementById('m-name').innerHTML = `${m.name}<br><small>Type: ${m.type}</small>`;
+    document.getElementById('m-dist').innerText = `${dist.toFixed(1)}m away`;
+    monsterMesh.visible = true;
+    monsterMesh.material.color.setHex(m.color);
+}
+function filterLogByType(type) {
+    const filtered = caughtMonsters.filter(m => m.type === type);
+    console.log(`You have caught these ${type} monsters:`, filtered);
+}
+const monsters = [
+    // ... previous types ...
+    
+    // Ghost/Dark
+    { name: "Spectrawisp", type: "Ghost/Dark", lat: 40.7140, lon: -74.0080, color: 0x4B0082 },
+    { name: "Shadowkin",   type: "Ghost/Dark", lat: 40.7141, lon: -74.0081, color: 0x2F4F4F },
+    { name: "Voidglider",  type: "Ghost/Dark", lat: 40.7142, lon: -74.0082, color: 0x000000 },
+
+    // Rock/Ground
+    { name: "Boulderback", type: "Rock/Ground", lat: 40.7150, lon: -74.0090, color: 0x8B4513 },
+    { name: "Geocrush",    type: "Rock/Ground", lat: 40.7151, lon: -74.0091, color: 0x556B2F },
+    { name: "Quartzite",   type: "Rock/Ground", lat: 40.7152, lon: -74.0092, color: 0xD3D3D3 },
+
+    // Ice/Flying
+    { name: "Frostwing",   type: "Ice/Flying", lat: 40.7160, lon: -74.0100, color: 0xADD8E6 },
+    { name: "Glacieron",   type: "Ice/Flying", lat: 40.7161, lon: -74.0101, color: 0x87CEFA },
+    { name: "Cryo-talon",  type: "Ice/Flying", lat: 40.7162, lon: -74.0102, color: 0xE0FFFF }
+];
+const monsterTypes = ["Grass/Electric", "Fire", "Water", "Ghost/Dark", "Rock/Ground", "Ice/Flying"];
+
+function checkMastery(type) {
+    // Get all monsters of this specific type
+    const monstersOfType = monsters.filter(m => m.type === type);
+    
+    // Check if all of them are in your caughtMonsters list
+    const hasAll = monstersOfType.every(m => caughtMonsters.includes(m.name));
+    
+    if (hasAll) {
+        alert(`🎉 MASTERY ACHIEVED: ${type} Collector! You caught all 3 ${type} monsters!`);
+        // Add a visual indicator to the log
+        return true;
+    }
+    return false;
+}
+function catchMonster() {
+    if (currentMonster && monsterMesh.visible) {
+        if (!caughtMonsters.includes(currentMonster.name)) {
+            caughtMonsters.push(currentMonster.name);
+            localStorage.setItem('myMonsters', JSON.stringify(caughtMonsters));
+            
+            // Check for mastery immediately after catching
+            checkMastery(currentMonster.type);
+            
+            alert(`You caught ${currentMonster.name}!`);
+        } else {
+            alert("You already caught this one!");
+        }
+        monsterMesh.visible = false;
+    }
+}
+// The effectiveness table
+const typeChart = {
+    "Fire":     { "Grass": 2.0, "Water": 0.5, "Rock": 0.5 },
+    "Water":    { "Fire": 2.0,  "Grass": 0.5, "Rock": 2.0 },
+    "Grass":    { "Water": 2.0, "Fire": 0.5,  "Rock": 2.0 },
+    "Rock":     { "Fire": 2.0,  "Ice": 2.0,   "Grass": 0.5 },
+    "Ghost":    { "Psychic": 2.0, "Dark": 0.5 },
+    "Ice":      { "Grass": 2.0, "Rock": 0.5,  "Fire": 0.5 }
+};
+
+// Function to calculate damage multiplier
+function getMultiplier(attackerType, defenderType) {
+    // If the attacker type exists and has a specific relationship, return it
+    if (typeChart[attackerType] && typeChart[attackerType][defenderType]) {
+        return typeChart[attackerType][defenderType];
+    }
+    return 1.0; // Neutral damage
+}
+function performAttack(attacker, defender) {
+    let baseDamage = 10;
+    let multiplier = getMultiplier(attacker.type, defender.type);
+    let finalDamage = baseDamage * multiplier;
+
+    let message = `Attacking with ${attacker.name} (${attacker.type})!`;
+    
+    if (multiplier > 1.0) message += " It's super effective!";
+    else if (multiplier < 1.0) message += " It's not very effective...";
+    
+    alert(message + ` Damage: ${finalDamage}`);
+}
+let isBattling = false;
+
+function startBattle(wildMonster) {
+    isBattling = true;
+    document.getElementById('battle-ui').style.display = 'block';
+    log("A wild " + wildMonster.name + " appeared!");
+}
+
+function attack() {
+    // In a full game, you'd pick your monster from a list here. 
+    // For now, we assume your "Florajoule" attacks the wild monster.
+    let myMonster = { name: "Florajoule", type: "Grass/Electric" };
+    
+    let multiplier = getMultiplier(myMonster.type, currentMonster.type);
+    let damage = 10 * multiplier;
+    
+    log(myMonster.name + " used Tackle!");
+    if (multiplier > 1) log("It's super effective! " + damage + " damage.");
+    else log("Dealt " + damage + " damage.");
+    
+    if (damage >= 15) {
+        log("Wild " + currentMonster.name + " fainted! You won!");
+    }
+}
+
+function log(msg) {
+    document.getElementById('battle-log').innerHTML += `<p>${msg}</p>`;
+}
+
+function endBattle() {
+    isBattling = false;
+    document.getElementById('battle-ui').style.display = 'none';
+}
+let enemyHP = 100;
+let myHP = 100;
+
+function updateHP(barId, amount) {
+    const bar = document.getElementById(barId);
+    // Ensure value doesn't go below 0
+    let newValue = parseInt(bar.value) - amount;
+    bar.value = Math.max(0, newValue);
+}
+
+function attack() {
+    let damage = 15; // Simplified for demo
+    
+    // Apply damage to enemy
+    enemyHP -= damage;
+    updateHP('enemy-hp', damage);
+    
+    log("Dealt " + damage + " damage!");
+
+    // Check if won
+    if (enemyHP <= 0) {
+        log("Victory! You caught the monster!");
+        endBattle();
+    } else {
+        // Monster attacks back after 1 second
+        setTimeout(() => {
+            myHP -= 10;
+            updateHP('player-hp', 10);
+            log("Wild monster hit you back for 10 damage!");
+        }, 1000);
+    }
+}
+function catchMonster() {
+    if (currentMonster && monsterMesh.visible) {
+        log("Throwing capture ball...");
+        
+        // Add the wobble class to the 3D element
+        monsterMesh.userData.isWobbling = true; 
+        
+        // Simulate a 2-second capture process
+        setTimeout(() => {
+            monsterMesh.userData.isWobbling = false;
+            
+            // 80% catch rate logic
+            if (Math.random() > 0.2) {
+                alert("GOTCHA! " + currentMonster.name + " was added to your collection!");
+                caughtMonsters.push(currentMonster.name);
+                localStorage.setItem('myMonsters', JSON.stringify(caughtMonsters));
+                monsterMesh.visible = false;
+            } else {
+                alert("Oh no! " + currentMonster.name + " broke free!");
+            }
+        }, 2000);
+    }
+}
+function animate() {
+    requestAnimationFrame(animate);
+    if (monsterMesh.visible) {
+        if (monsterMesh.userData.isWobbling) {
+            // Apply a manual wobble rotation to the 3D mesh
+            monsterMesh.rotation.z = Math.sin(Date.now() * 0.05) * 0.5;
+        } else {
+            monsterMesh.rotation.y += 0.05; // Normal idle spin
+        }
+    }
+    renderer.render(scene, camera);
+}
+function catchMonster() {
+    if (currentMonster && monsterMesh.visible) {
+        // 1. Calculate the health percentage (0.0 to 1.0)
+        let hpPercent = enemyHP / 100; 
+        
+        // 2. The catch rate is the inverse of the HP percent
+        // If HP is 100 (1.0), rate is 0. If HP is 0 (0.0), rate is 1 (100%)
+        let catchRate = 1.0 - hpPercent; 
+        
+        // 3. Generate a random number between 0 and 1
+        let roll = Math.random();
+        
+        log("Throwing ball... Probability: " + (catchRate * 100).toFixed(0) + "%");
+        
+        monsterMesh.userData.isWobbling = true; 
+        
+        setTimeout(() => {
+            monsterMesh.userData.isWobbling = false;
+            
+            // 4. Did the roll succeed?
+            if (roll <= catchRate) {
+                alert("GOTCHA! " + currentMonster.name + " was captured!");
+                caughtMonsters.push(currentMonster.name);
+                localStorage.setItem('myMonsters', JSON.stringify(caughtMonsters));
+                monsterMesh.visible = false;
+            } else {
+                alert("The monster broke free! Get its HP lower!");
+            }
+        }, 2000);
+    }
+}
+// Add rarity to your monster objects (1.0 = easy, 0.5 = hard)
+let finalCatchRate = (1.0 - hpPercent) * currentMonster.rarity;
