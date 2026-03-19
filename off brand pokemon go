@@ -15,10 +15,6 @@
 </head>
 <body>
 
-    <div id="map"></div>
-    <div id="ui">
-        <div id="m-info">Searching for monsters...</div>
-        <button onclick="catchMonster()">CATCH IT!</button>
     </div>
 
     <div id="battle-ui">
