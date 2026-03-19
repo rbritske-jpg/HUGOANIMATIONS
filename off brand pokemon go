@@ -3,8 +3,6 @@
 <head>
     <title>JS GO: Monster Hunter</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #001428; color: #00f2ff; font-family: monospace; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; filter: invert(100%) hue-rotate(180deg) brightness(0.8) contrast(1.2); }
@@ -29,7 +27,7 @@
         <button onclick="attack()">ATTACK</button>
     </div>
 
-    <script>
+
         // 1. Data & State
         const monsters = [
             { name: "Florajoule", type: "Grass/Electric", lat: 40.7128, lon: -74.0060, color: 0x32CD32, rarity: 1.0 },
@@ -56,6 +54,50 @@
         }
 
         // Initialize Map and Three.js (as discussed in previous steps)
-    </script>
 </body>
 </html>
+// 1. Setup variables (with Save/Load feature)
+let monstersCaught = localStorage.getItem('pokemonScore') ? parseInt(localStorage.getItem('pokemonScore')) : 0;
+let userPos = { lat: 40.7128, lon: -74.0060 }; // Default starting point
+
+// 2. Load score on startup
+window.onload = function() {
+    document.getElementById('score-number').innerText = monstersCaught;
+    updateRankDisplay();
+    startGps(); 
+};
+
+// 3. KEYBOARD CONTROLS (For Chromebook users)
+window.addEventListener('keydown', function(e) {
+    const moveStep = 0.0001; // How far you move per click
+    if (e.key === "ArrowUp") userPos.lat += moveStep;
+    if (e.key === "ArrowDown") userPos.lat -= moveStep;
+    if (e.key === "ArrowLeft") userPos.lon -= moveStep;
+    if (e.key === "ArrowRight") userPos.lon += moveStep;
+    
+    updateMap(); // Redraw your position on the screen
+});
+
+// 4. GPS TRACKER (For phones/tablets)
+function startGps() {
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition((position) => {
+            userPos.lat = position.coords.latitude;
+            userPos.lon = position.coords.longitude;
+            updateMap();
+        });
+    }
+}
+
+function updateScore() {
+    monstersCaught++;
+    localStorage.setItem('pokemonScore', monstersCaught);
+    document.getElementById('score-number').innerText = monstersCaught;
+    updateRankDisplay();
+}
+
+function updateRankDisplay() {
+    let rankElement = document.getElementById('player-rank');
+    if (monstersCaught >= 15) { rankElement.innerText = "Master Trainer"; rankElement.style.color = "#00ffff"; }
+    else if (monstersCaught >= 5) { rankElement.innerText = "Pro Adventurer"; rankElement.style.color = "#ffd700"; }
+}
